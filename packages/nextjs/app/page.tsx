@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { NextPage } from "next";
 import { formatEther } from "viem";
 import { erc20Abi, parseEther } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import { useWriteContract } from "wagmi";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
@@ -17,7 +17,7 @@ const STAKE_AMOUNT = parseEther("50000");
 //                     COUNTDOWN TIMER
 // ═══════════════════════════════════════════════════════════
 
-function CountdownTimer({ deadline }: { deadline: bigint | undefined }) {
+function CountdownTimer({ deadline, winnerPicked }: { deadline: bigint | undefined; winnerPicked: boolean }) {
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
 
   useEffect(() => {
@@ -26,6 +26,14 @@ function CountdownTimer({ deadline }: { deadline: bigint | undefined }) {
   }, []);
 
   if (!deadline) return <div className="text-4xl font-bold text-center">Loading...</div>;
+
+  if (winnerPicked) {
+    return (
+      <div className="text-4xl font-bold text-center text-success">
+        ✅ ROUND COMPLETE
+      </div>
+    );
+  }
 
   const remaining = Number(deadline) - now;
   if (remaining <= 0) {
@@ -72,6 +80,8 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
   const { writeContractAsync: writeErc20 } = useWriteContract();
   const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
+  const publicClient = usePublicClient();
+  const [isStaking, setIsStaking] = useState(false);
 
   if (!submission) return null;
 
@@ -80,15 +90,17 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
   const mySharesFormatted = myShares ? Number(formatEther(myShares)).toLocaleString() : "0";
 
   const handleStake = async () => {
-    if (!deployedContract) return;
+    if (!deployedContract || !publicClient) return;
+    setIsStaking(true);
     try {
       // First approve CLAWD
-      await writeErc20({
+      const approveTx = await writeErc20({
         address: CLAWD_TOKEN,
         abi: erc20Abi,
         functionName: "approve",
         args: [deployedContract.address, STAKE_AMOUNT],
       });
+      await publicClient.waitForTransactionReceipt({ hash: approveTx });
       // Then stake
       await writeMarket({
         functionName: "stake",
@@ -96,6 +108,8 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
       });
     } catch (e) {
       console.error("Stake failed:", e);
+    } finally {
+      setIsStaking(false);
     }
   };
 
@@ -126,12 +140,12 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
                 </div>
               </div>
               {!isTimedOut && (
-                <button className="btn btn-primary btn-sm" onClick={handleStake}>
-                  Stake 50k 🦞
+                <button className="btn btn-primary btn-sm" onClick={handleStake} disabled={isStaking}>
+                  {isStaking ? <span className="loading loading-spinner loading-sm"></span> : "Stake 50k 🦞"}
                 </button>
               )}
             </div>
-            {myShares && myShares > 0n && (
+            {myShares !== undefined && myShares > 0n && (
               <div className="text-xs text-success mt-1">Your shares: {mySharesFormatted}</div>
             )}
           </div>
@@ -147,9 +161,11 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
 
 function SubmitForm() {
   const [imageUrl, setImageUrl] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
   const { writeContractAsync: writeErc20 } = useWriteContract();
   const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
+  const publicClient = usePublicClient();
 
   const { data: hasSubmitted } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
@@ -158,15 +174,18 @@ function SubmitForm() {
   });
 
   const handleSubmit = async () => {
-    if (!imageUrl || !deployedContract) return;
+    if (!imageUrl || !deployedContract || !publicClient) return;
+    setIsSubmitting(true);
     try {
       // First approve CLAWD spending
-      await writeErc20({
+      const approveTx = await writeErc20({
         address: CLAWD_TOKEN,
         abi: erc20Abi,
         functionName: "approve",
         args: [deployedContract.address, STAKE_AMOUNT],
       });
+      // Wait for approval to be mined
+      await publicClient.waitForTransactionReceipt({ hash: approveTx });
       // Then submit
       await writeMarket({
         functionName: "submit",
@@ -175,6 +194,8 @@ function SubmitForm() {
       setImageUrl("");
     } catch (e) {
       console.error("Submit failed:", e);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -201,8 +222,8 @@ function SubmitForm() {
             value={imageUrl}
             onChange={e => setImageUrl(e.target.value)}
           />
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={!imageUrl}>
-            Submit & Stake
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={!imageUrl || isSubmitting}>
+            {isSubmitting ? <span className="loading loading-spinner loading-sm"></span> : "Submit & Stake"}
           </button>
         </div>
         {imageUrl && (
@@ -456,7 +477,7 @@ const Home: NextPage = () => {
             Stake $CLAWD to pick my next profile picture. Early stakers get more shares.
           </p>
 
-          <CountdownTimer deadline={deadline} />
+          <CountdownTimer deadline={deadline} winnerPicked={!!winnerPicked} />
 
           {totalPool !== undefined && (
             <div className="mt-4 text-2xl font-bold">
