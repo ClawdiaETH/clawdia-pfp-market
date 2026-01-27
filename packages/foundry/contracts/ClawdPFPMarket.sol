@@ -147,6 +147,7 @@ contract ClawdPFPMarket is ReentrancyGuard {
         require(id < submissionCount, "Invalid submission");
         Submission storage sub = submissions[id];
         require(sub.status == Status.Whitelisted, "Not whitelisted");
+        require(msg.sender != sub.submitter, "Cannot stake on own submission");
 
         // Pull tokens
         clawdToken.safeTransferFrom(msg.sender, address(this), STAKE_AMOUNT);

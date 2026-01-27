@@ -28,11 +28,7 @@ function CountdownTimer({ deadline, winnerPicked }: { deadline: bigint | undefin
   if (!deadline) return <div className="text-4xl font-bold text-center">Loading...</div>;
 
   if (winnerPicked) {
-    return (
-      <div className="text-4xl font-bold text-center text-success">
-        ✅ ROUND COMPLETE
-      </div>
-    );
+    return <div className="text-4xl font-bold text-center text-success">✅ ROUND COMPLETE</div>;
   }
 
   const remaining = Number(deadline) - now;
@@ -139,9 +135,13 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
                   by {submitter?.slice(0, 6)}...{submitter?.slice(-4)}
                 </div>
               </div>
-              {!isTimedOut && (
-                <button className="btn btn-primary btn-sm" onClick={handleStake} disabled={isStaking}>
-                  {isStaking ? <span className="loading loading-spinner loading-sm"></span> : "Stake 50k 🦞"}
+              {!isTimedOut && address?.toLowerCase() !== submitter?.toLowerCase() && (
+                <button
+                  className="btn btn-primary btn-lg text-xl font-black tracking-wide"
+                  onClick={handleStake}
+                  disabled={isStaking}
+                >
+                  {isStaking ? <span className="loading loading-spinner loading-md"></span> : "💰 LOCK IN"}
                 </button>
               )}
             </div>
@@ -405,7 +405,17 @@ function AdminPanel() {
   );
 }
 
-function PendingCard({ id, checked, onToggle, onBan }: { id: number; checked: boolean; onToggle: () => void; onBan: () => void }) {
+function PendingCard({
+  id,
+  checked,
+  onToggle,
+  onBan,
+}: {
+  id: number;
+  checked: boolean;
+  onToggle: () => void;
+  onBan: () => void;
+}) {
   const { data: submission } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
     functionName: "getSubmission",
@@ -417,12 +427,7 @@ function PendingCard({ id, checked, onToggle, onBan }: { id: number; checked: bo
 
   return (
     <div className="flex items-center gap-3 bg-base-100 p-2 rounded-lg">
-      <input
-        type="checkbox"
-        className="checkbox checkbox-success checkbox-sm"
-        checked={checked}
-        onChange={onToggle}
-      />
+      <input type="checkbox" className="checkbox checkbox-success checkbox-sm" checked={checked} onChange={onToggle} />
       <img
         src={imageUrl}
         alt={`Pending #${id}`}
@@ -518,9 +523,12 @@ const Home: NextPage = () => {
   });
 
   // Use chain-reported timeRemaining (accurate on forks) with browser-time fallback
-  const isTimedOut = timeRemaining !== undefined
-    ? timeRemaining === 0n
-    : deadline ? Math.floor(Date.now() / 1000) >= Number(deadline) : false;
+  const isTimedOut =
+    timeRemaining !== undefined
+      ? timeRemaining === 0n
+      : deadline
+        ? Math.floor(Date.now() / 1000) >= Number(deadline)
+        : false;
 
   return (
     <div className="flex flex-col items-center min-h-screen">
@@ -605,12 +613,7 @@ const Home: NextPage = () => {
             <div className="divider my-1"></div>
             <p className="text-xs opacity-50">
               $CLAWD:{" "}
-              <a
-                href={`https://basescan.org/token/${CLAWD_TOKEN}`}
-                target="_blank"
-                rel="noreferrer"
-                className="link"
-              >
+              <a href={`https://basescan.org/token/${CLAWD_TOKEN}`} target="_blank" rel="noreferrer" className="link">
                 {CLAWD_TOKEN}
               </a>
             </p>
