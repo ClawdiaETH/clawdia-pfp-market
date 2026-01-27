@@ -14,12 +14,7 @@ type HeaderMenuLink = {
   icon?: React.ReactNode;
 };
 
-export const menuLinks: HeaderMenuLink[] = [
-  {
-    label: "🦞 PFP Market",
-    href: "/",
-  },
-];
+export const menuLinks: HeaderMenuLink[] = [];
 
 export const HeaderMenuLinks = () => {
   const pathname = usePathname();
