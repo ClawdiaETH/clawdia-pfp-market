@@ -251,6 +251,8 @@ function SubmitForm() {
 function AdminPanel() {
   const { address } = useAccount();
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [initialized, setInitialized] = useState(false);
 
   const { data: pendingIds } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
@@ -279,18 +281,45 @@ function AdminPanel() {
     functionName: "admin",
   });
 
+  // Auto-check all pending when they first load
+  useEffect(() => {
+    if (pendingIds && pendingIds.length > 0 && !initialized) {
+      setCheckedIds(new Set(pendingIds.map((id: bigint) => id.toString())));
+      setInitialized(true);
+    }
+    if (pendingIds && pendingIds.length === 0) {
+      setInitialized(false);
+    }
+  }, [pendingIds, initialized]);
+
   const isAdmin = address && contractAdmin && address.toLowerCase() === contractAdmin.toLowerCase();
   if (!isAdmin) return null;
 
   const isTimedOut = deadline ? Math.floor(Date.now() / 1000) >= Number(deadline) : false;
 
-  const handleWhitelistAll = async () => {
-    if (!pendingIds || pendingIds.length === 0) return;
+  const toggleCheck = (id: bigint) => {
+    const key = id.toString();
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const handleWhitelistChecked = async () => {
+    if (checkedIds.size === 0) return;
+    const idsToWhitelist = Array.from(checkedIds).map(s => BigInt(s));
     try {
       await writeMarket({
         functionName: "whitelistBatch",
-        args: [pendingIds as bigint[]],
+        args: [idsToWhitelist],
       });
+      setCheckedIds(new Set());
+      setInitialized(false);
     } catch (e) {
       console.error("Whitelist failed:", e);
     }
@@ -318,6 +347,8 @@ function AdminPanel() {
     }
   };
 
+  const checkedCount = checkedIds.size;
+
   return (
     <div className="card bg-warning/10 shadow-xl border border-warning">
       <div className="card-body">
@@ -328,12 +359,22 @@ function AdminPanel() {
           <h4 className="font-bold mb-2">Pending Submissions ({pendingIds ? pendingIds.length : 0})</h4>
           {pendingIds && pendingIds.length > 0 ? (
             <>
-              <button className="btn btn-success btn-sm mb-2" onClick={handleWhitelistAll}>
-                ✅ Whitelist All ({pendingIds.length})
+              <button
+                className="btn btn-success btn-sm mb-2"
+                onClick={handleWhitelistChecked}
+                disabled={checkedCount === 0}
+              >
+                ✅ Whitelist Selected ({checkedCount})
               </button>
               <div className="space-y-2">
                 {pendingIds.map((id: bigint) => (
-                  <PendingCard key={id.toString()} id={Number(id)} onBan={() => handleBan(id)} />
+                  <PendingCard
+                    key={id.toString()}
+                    id={Number(id)}
+                    checked={checkedIds.has(id.toString())}
+                    onToggle={() => toggleCheck(id)}
+                    onBan={() => handleBan(id)}
+                  />
                 ))}
               </div>
             </>
@@ -364,7 +405,7 @@ function AdminPanel() {
   );
 }
 
-function PendingCard({ id, onBan }: { id: number; onBan: () => void }) {
+function PendingCard({ id, checked, onToggle, onBan }: { id: number; checked: boolean; onToggle: () => void; onBan: () => void }) {
   const { data: submission } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
     functionName: "getSubmission",
@@ -376,6 +417,12 @@ function PendingCard({ id, onBan }: { id: number; onBan: () => void }) {
 
   return (
     <div className="flex items-center gap-3 bg-base-100 p-2 rounded-lg">
+      <input
+        type="checkbox"
+        className="checkbox checkbox-success checkbox-sm"
+        checked={checked}
+        onChange={onToggle}
+      />
       <img
         src={imageUrl}
         alt={`Pending #${id}`}
