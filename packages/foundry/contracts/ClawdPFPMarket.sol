@@ -172,6 +172,14 @@ contract ClawdPFPMarket is ReentrancyGuard {
     // ══════════════════════════════════════════════════════════════
 
     /**
+     * @notice Transfer admin role to a new address.
+     */
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "Zero address");
+        admin = newAdmin;
+    }
+
+    /**
      * @notice Whitelist multiple pending submissions in a batch.
      */
     function whitelistBatch(uint256[] calldata ids) external onlyAdmin {

@@ -491,6 +491,19 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "transferAdmin",
+          inputs: [
+            {
+              name: "newAdmin",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "whitelistBatch",
           inputs: [
             {
@@ -684,7 +697,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 41376943,
+      deployedOnBlock: 41377587,
     },
   },
 } as const;

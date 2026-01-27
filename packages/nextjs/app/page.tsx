@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import type { NextPage } from "next";
 import { formatEther } from "viem";
+import { erc20Abi, parseEther } from "viem";
 import { useAccount } from "wagmi";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useWriteContract } from "wagmi";
+import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
-const ADMIN_ADDRESS = "0x11ce532845cE0eAcdA41f72FDc1C88c335981442";
-// Token address and stake amount (used in contract, referenced here for display)
-// const CLAWD_TOKEN = "0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07";
-// const STAKE_AMOUNT = parseEther("50000");
+const CLAWD_TOKEN = "0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07" as `0x${string}`;
+const STAKE_AMOUNT = parseEther("50000");
+
+// Admin is read from the contract — no hardcoded address needed
 
 // ═══════════════════════════════════════════════════════════
 //                     COUNTDOWN TIMER
@@ -68,6 +70,8 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
   });
 
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
+  const { writeContractAsync: writeErc20 } = useWriteContract();
+  const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
 
   if (!submission) return null;
 
@@ -76,8 +80,16 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
   const mySharesFormatted = myShares ? Number(formatEther(myShares)).toLocaleString() : "0";
 
   const handleStake = async () => {
+    if (!deployedContract) return;
     try {
-      // First approve tokens
+      // First approve CLAWD
+      await writeErc20({
+        address: CLAWD_TOKEN,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [deployedContract.address, STAKE_AMOUNT],
+      });
+      // Then stake
       await writeMarket({
         functionName: "stake",
         args: [BigInt(id)],
@@ -136,6 +148,8 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
 function SubmitForm() {
   const [imageUrl, setImageUrl] = useState("");
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
+  const { writeContractAsync: writeErc20 } = useWriteContract();
+  const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
 
   const { data: hasSubmitted } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
@@ -144,8 +158,16 @@ function SubmitForm() {
   });
 
   const handleSubmit = async () => {
-    if (!imageUrl) return;
+    if (!imageUrl || !deployedContract) return;
     try {
+      // First approve CLAWD spending
+      await writeErc20({
+        address: CLAWD_TOKEN,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [deployedContract.address, STAKE_AMOUNT],
+      });
+      // Then submit
       await writeMarket({
         functionName: "submit",
         args: [imageUrl],
@@ -231,7 +253,12 @@ function AdminPanel() {
     args: [0n, 10n],
   });
 
-  const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+  const { data: contractAdmin } = useScaffoldReadContract({
+    contractName: "ClawdPFPMarket",
+    functionName: "admin",
+  });
+
+  const isAdmin = address && contractAdmin && address.toLowerCase() === contractAdmin.toLowerCase();
   if (!isAdmin) return null;
 
   const isTimedOut = deadline ? Math.floor(Date.now() / 1000) >= Number(deadline) : false;

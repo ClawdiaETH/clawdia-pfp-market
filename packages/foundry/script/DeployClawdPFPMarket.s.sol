@@ -9,11 +9,11 @@ contract DeployClawdPFPMarket is ScaffoldETHDeploy {
         // $CLAWD token on Base
         address clawdToken = 0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07;
 
-        // Duration: 2 minutes for testing, 5 hours for production
-        uint256 duration = 2 minutes;
+        // Duration: 10 minutes for testing, 5 hours for production
+        uint256 duration = 10 minutes;
 
-        // Admin: Clawd's wallet
-        address admin = 0x11ce532845cE0eAcdA41f72FDc1C88c335981442;
+        // Admin: deployer wallet (burner in dev, MetaMask in prod)
+        address admin = deployer;
 
         new ClawdPFPMarket(clawdToken, duration, admin);
     }
