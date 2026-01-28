@@ -273,7 +273,7 @@ function AdminPanel() {
   const { data: topSubmissions } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
     functionName: "getTopSubmissions",
-    args: [0n, 10n],
+    args: [0n, 3n],
   });
 
   const { data: contractAdmin } = useScaffoldReadContract({
@@ -493,7 +493,7 @@ const Home: NextPage = () => {
   const { data: topSubmissions } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
     functionName: "getTopSubmissions",
-    args: [0n, 10n],
+    args: [0n, 3n],
   });
 
   const { data: totalPool } = useScaffoldReadContract({
