@@ -9,7 +9,15 @@ import { useWriteContract } from "wagmi";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 const CLAWD_TOKEN = "0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07" as `0x${string}`;
-const STAKE_AMOUNT = parseEther("50000");
+
+// Read STAKE_AMOUNT from the contract dynamically
+function useStakeAmount() {
+  const { data } = useScaffoldReadContract({
+    contractName: "ClawdPFPMarket",
+    functionName: "STAKE_AMOUNT",
+  });
+  return data ?? parseEther("1000"); // fallback while loading
+}
 
 // Admin is read from the contract — no hardcoded address needed
 
@@ -59,6 +67,7 @@ function CountdownTimer({ deadline, winnerPicked }: { deadline: bigint | undefin
 // ═══════════════════════════════════════════════════════════
 
 function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; isTimedOut: boolean }) {
+  const STAKE_AMOUNT = useStakeAmount();
   const { address } = useAccount();
 
   const { data: submission } = useScaffoldReadContract({
@@ -135,7 +144,7 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
                   by {submitter?.slice(0, 6)}...{submitter?.slice(-4)}
                 </div>
               </div>
-              {!isTimedOut && address?.toLowerCase() !== submitter?.toLowerCase() && (
+              {!isTimedOut && address && address?.toLowerCase() !== submitter?.toLowerCase() && (
                 <button
                   className="btn btn-primary btn-lg text-xl font-black tracking-wide"
                   onClick={handleStake}
@@ -160,8 +169,10 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
 // ═══════════════════════════════════════════════════════════
 
 function SubmitForm() {
+  const STAKE_AMOUNT = useStakeAmount();
   const [imageUrl, setImageUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { address, isConnected } = useAccount();
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
   const { writeContractAsync: writeErc20 } = useWriteContract();
   const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
@@ -170,7 +181,14 @@ function SubmitForm() {
   const { data: hasSubmitted } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
     functionName: "hasSubmitted",
-    args: [useAccount().address],
+    args: [address],
+  });
+
+  // Get pending submissions to show user their image before whitelist
+  const { data: pendingIds } = useScaffoldReadContract({
+    contractName: "ClawdPFPMarket",
+    functionName: "getPendingSubmissions",
+    args: [0n, 50n],
   });
 
   const handleSubmit = async () => {
@@ -199,12 +217,19 @@ function SubmitForm() {
     }
   };
 
-  if (hasSubmitted) {
+  if (!isConnected) {
     return (
-      <div className="alert alert-info">
-        <span>✅ You&apos;ve already submitted! You can still stake on other images.</span>
+      <div className="card bg-base-100 shadow-xl border-2 border-dashed border-primary">
+        <div className="card-body text-center">
+          <h3 className="card-title text-xl justify-center">🦞 Submit Your Image</h3>
+          <p className="text-sm opacity-60">Connect your wallet on Base to submit and stake!</p>
+        </div>
       </div>
     );
+  }
+
+  if (hasSubmitted) {
+    return <PendingSubmissionCard address={address} pendingIds={pendingIds} />;
   }
 
   return (
@@ -212,7 +237,7 @@ function SubmitForm() {
       <div className="card-body">
         <h3 className="card-title text-xl">🦞 Submit Your Image</h3>
         <p className="text-sm opacity-60">
-          Submit an image URL + stake 50,000 $CLAWD. Make it a lobster AI agent with a wallet and dapp building tools!
+          Submit an image URL + stake {Number(formatEther(STAKE_AMOUNT)).toLocaleString()} $CLAWD. Make it a lobster AI agent with a wallet and dapp building tools!
         </p>
         <div className="flex gap-2">
           <input
@@ -239,6 +264,55 @@ function SubmitForm() {
             />
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Show user their pending submission with image
+function PendingSubmissionCard({ address, pendingIds }: { address: string | undefined; pendingIds: readonly bigint[] | undefined }) {
+  // Try to find user's submission among pending
+  const ids = pendingIds ?? [];
+  
+  return (
+    <div className="card bg-base-100 shadow-xl border-2 border-warning">
+      <div className="card-body">
+        <h3 className="card-title text-xl">⏳ Your Submission is Pending Review</h3>
+        <p className="text-sm opacity-60">Clawd will review and whitelist images shortly. You can still stake on other approved images!</p>
+        {ids.map((id) => (
+          <PendingSubmissionImage key={id.toString()} id={id} address={address} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PendingSubmissionImage({ id, address }: { id: bigint; address: string | undefined }) {
+  const { data: submission } = useScaffoldReadContract({
+    contractName: "ClawdPFPMarket",
+    functionName: "getSubmission",
+    args: [id],
+  });
+
+  if (!submission) return null;
+  const [submitter, imageUrl] = submission;
+  
+  // Only show if this is the connected user's submission
+  if (submitter?.toLowerCase() !== address?.toLowerCase()) return null;
+
+  return (
+    <div className="flex items-center gap-4 mt-2">
+      <img
+        src={imageUrl}
+        alt="Your submission"
+        className="w-24 h-24 object-cover rounded-lg border-2 border-warning"
+        onError={e => {
+          (e.target as HTMLImageElement).src = "https://placehold.co/200x200/1a1a2e/e94560?text=🦞";
+        }}
+      />
+      <div>
+        <div className="badge badge-warning">Pending Review</div>
+        <div className="text-xs opacity-40 mt-1">ID #{id.toString()}</div>
       </div>
     </div>
   );
@@ -485,6 +559,8 @@ function WinnerPickCard({ id, rank, onPick }: { id: number; rank: number; onPick
 // ═══════════════════════════════════════════════════════════
 
 const Home: NextPage = () => {
+  const STAKE_AMOUNT = useStakeAmount();
+
   const { data: deadline } = useScaffoldReadContract({
     contractName: "ClawdPFPMarket",
     functionName: "deadline",
@@ -600,7 +676,7 @@ const Home: NextPage = () => {
           <div className="card-body text-sm opacity-70">
             <h3 className="font-bold text-base">How it works</h3>
             <ul className="list-disc list-inside space-y-1">
-              <li>Submit an image URL + stake 50,000 $CLAWD (~$5)</li>
+              <li>Submit an image URL + stake {Number(formatEther(STAKE_AMOUNT)).toLocaleString()} $CLAWD</li>
               <li>Others can stake on your image — early stakers get more shares (bonding curve)</li>
               <li>Images are reviewed before going live (no NSFW)</li>
               <li>When the timer ends, Clawd picks the winner from the top 10</li>

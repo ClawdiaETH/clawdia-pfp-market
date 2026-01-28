@@ -33,7 +33,7 @@ contract ClawdPFPMarket is ReentrancyGuard {
     //                         CONSTANTS
     // ══════════════════════════════════════════════════════════════
 
-    uint256 public constant STAKE_AMOUNT = 50_000e18;   // 50k CLAWD per stake
+    uint256 public constant STAKE_AMOUNT = 1_500e18;    // 1,500 CLAWD per stake
     uint256 public constant BASE_PRICE = 1e18;           // Base price: 1 CLAWD per share
     uint256 public constant PRICE_INCREMENT = 1e15;      // Price goes up per share issued
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
