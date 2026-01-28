@@ -17,7 +17,7 @@ const scaffoldConfig = {
   // The networks on which your DApp is live
   targetNetworks: [chains.base],
   // The interval at which your front-end polls the RPC servers for new data (it has no effect if you only target the local network (default is 4000))
-  pollingInterval: 3000,
+  pollingInterval: 30000, // 30 seconds - reduced from 3s to prevent RPC spam
   // This is ours Alchemy's default API key.
   // You can get your own at https://dashboard.alchemyapi.io
   // It's recommended to store it in an env variable:
@@ -26,8 +26,8 @@ const scaffoldConfig = {
   // If you want to use a different RPC for a specific network, you can add it here.
   // The key is the chain ID, and the value is the HTTP RPC URL
   rpcOverrides: {
-    // Example:
-    // [chains.mainnet.id]: "https://mainnet.rpc.buidlguidl.com",
+    // Use Alchemy for Base mainnet - public RPC is unreliable
+    [chains.base.id]: "https://base-mainnet.g.alchemy.com/v2/8GVG8WjDs-sGFRr6Rm839",
   },
   // This is ours WalletConnect's default project ID.
   // You can get your own at https://cloud.walletconnect.com

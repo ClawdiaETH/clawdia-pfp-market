@@ -1,25 +1,116 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { NextPage } from "next";
 import { formatEther, parseEther } from "viem";
 import { erc20Abi } from "viem";
-import { useAccount, usePublicClient } from "wagmi";
+import { base } from "viem/chains";
+import { useAccount, useChainId, useReadContracts, useSwitchChain } from "wagmi";
 import { useWriteContract } from "wagmi";
-import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 const CLAWD_TOKEN = "0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07" as `0x${string}`;
+const STAKE_AMOUNT = parseEther("1200");
+const POLLING_INTERVAL = 3000; // 3 seconds - single batched poll
 
-// Read STAKE_AMOUNT from the contract dynamically
-function useStakeAmount() {
-  const { data } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "STAKE_AMOUNT",
+// ═══════════════════════════════════════════════════════════
+//         SINGLE BATCHED POLLING HOOK (ALL READS IN ONE)
+// ═══════════════════════════════════════════════════════════
+
+function usePFPMarketState() {
+  const { address } = useAccount();
+  const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
+
+  const contractAddress = deployedContract?.address;
+  const abi = deployedContract?.abi;
+
+  // Build the batched contract reads
+  const contracts = useMemo(() => {
+    if (!contractAddress || !abi) return [];
+
+    const baseReads = [
+      { address: contractAddress, abi, functionName: "deadline" },
+      { address: contractAddress, abi, functionName: "totalPool" },
+      { address: contractAddress, abi, functionName: "winnerPicked" },
+      { address: contractAddress, abi, functionName: "winningId" },
+      { address: contractAddress, abi, functionName: "timeRemaining" },
+      { address: contractAddress, abi, functionName: "admin" },
+      { address: contractAddress, abi, functionName: "getTopSubmissions", args: [0n, 10n] },
+      { address: contractAddress, abi, functionName: "getPendingSubmissions", args: [0n, 10n] },
+    ] as const;
+
+    // Add user-specific reads if connected
+    const userReads = address
+      ? ([
+          { address: contractAddress, abi, functionName: "hasSubmitted", args: [address] },
+          { address: contractAddress, abi, functionName: "canClaim", args: [address] },
+          { address: contractAddress, abi, functionName: "getClaimAmount", args: [address] },
+          { address: CLAWD_TOKEN, abi: erc20Abi, functionName: "allowance", args: [address, contractAddress] },
+        ] as const)
+      : [];
+
+    return [...baseReads, ...userReads];
+  }, [contractAddress, abi, address]);
+
+  const { data, refetch } = useReadContracts({
+    contracts: contracts as any,
+    query: {
+      enabled: contracts.length > 0,
+      refetchInterval: POLLING_INTERVAL,
+    },
   });
-  return data ?? parseEther("1000"); // fallback while loading
+
+  // Parse results
+  const results = useMemo(() => {
+    if (!data) return null;
+
+    const baseResults = {
+      deadline: data[0]?.result as bigint | undefined,
+      totalPool: data[1]?.result as bigint | undefined,
+      winnerPicked: data[2]?.result as boolean | undefined,
+      winningId: data[3]?.result as bigint | undefined,
+      timeRemaining: data[4]?.result as bigint | undefined,
+      admin: data[5]?.result as string | undefined,
+      topSubmissions: data[6]?.result as readonly [readonly bigint[], readonly bigint[]] | undefined,
+      pendingIds: data[7]?.result as readonly bigint[] | undefined,
+    };
+
+    // User-specific results (indices 8-11 if user is connected)
+    const userResults = address
+      ? {
+          hasSubmitted: data[8]?.result as boolean | undefined,
+          canClaim: data[9]?.result as boolean | undefined,
+          claimAmount: data[10]?.result as bigint | undefined,
+          allowance: (data[11]?.result as bigint) ?? 0n,
+        }
+      : {
+          hasSubmitted: false,
+          canClaim: false,
+          claimAmount: 0n,
+          allowance: 0n,
+        };
+
+    return { ...baseResults, ...userResults };
+  }, [data, address]);
+
+  return { ...results, refetch, contractAddress, abi };
 }
 
-// Admin is read from the contract — no hardcoded address needed
+// Fetch individual submission data (only when needed, not polling)
+function useSubmissionData(id: bigint | undefined, contractAddress: string | undefined, abi: any) {
+  const { data } = useReadContracts({
+    contracts:
+      id !== undefined && contractAddress && abi
+        ? [{ address: contractAddress as `0x${string}`, abi, functionName: "getSubmission", args: [id] }]
+        : [],
+    query: {
+      enabled: id !== undefined && !!contractAddress && !!abi,
+      staleTime: 10000, // Cache for 10s
+    },
+  });
+
+  return data?.[0]?.result as [string, string, bigint, boolean, boolean, bigint] | undefined;
+}
 
 // ═══════════════════════════════════════════════════════════
 //                     COUNTDOWN TIMER
@@ -66,51 +157,93 @@ function CountdownTimer({ deadline, winnerPicked }: { deadline: bigint | undefin
 //                    SUBMISSION CARD
 // ═══════════════════════════════════════════════════════════
 
-function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; isTimedOut: boolean }) {
-  const STAKE_AMOUNT = useStakeAmount();
+function SubmissionCard({
+  id,
+  rank,
+  isTimedOut,
+  allowance,
+  onRefetch,
+  contractAddress,
+  abi,
+}: {
+  id: number;
+  rank: number;
+  isTimedOut: boolean;
+  allowance: bigint;
+  onRefetch: () => void;
+  contractAddress: string | undefined;
+  abi: any;
+}) {
   const { address } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  const isOnBase = chainId === base.id;
 
-  const { data: submission } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getSubmission",
-    args: [BigInt(id)],
-  });
+  const submission = useSubmissionData(BigInt(id), contractAddress, abi);
 
-  const { data: myShares } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getShareBalance",
-    args: [BigInt(id), address],
+  // Read user's shares for this submission
+  const { data: userSharesData } = useReadContracts({
+    contracts:
+      address && contractAddress && abi
+        ? [{ address: contractAddress as `0x${string}`, abi, functionName: "shares", args: [BigInt(id), address] }]
+        : [],
+    query: {
+      enabled: !!address && !!contractAddress && !!abi,
+      staleTime: 10000,
+    },
   });
+  const userShares = userSharesData?.[0]?.result as bigint | undefined;
+
+  const [isSwitching, setIsSwitching] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isStaking, setIsStaking] = useState(false);
 
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
   const { writeContractAsync: writeErc20 } = useWriteContract();
-  const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
-  const publicClient = usePublicClient();
-  const [isStaking, setIsStaking] = useState(false);
 
   if (!submission) return null;
 
   const [submitter, imageUrl, totalStaked, , , stakerCount] = submission;
   const stakedFormatted = Number(formatEther(totalStaked)).toLocaleString();
-  const mySharesFormatted = myShares ? Number(formatEther(myShares)).toLocaleString() : "0";
+  const hasEnoughAllowance = allowance >= STAKE_AMOUNT;
 
-  const handleStake = async () => {
-    if (!deployedContract || !publicClient) return;
-    setIsStaking(true);
+  const handleSwitchNetwork = async () => {
+    setIsSwitching(true);
     try {
-      // First approve CLAWD
-      const approveTx = await writeErc20({
+      await switchChain({ chainId: base.id });
+    } catch (e) {
+      console.error("Switch network failed:", e);
+    } finally {
+      setIsSwitching(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!contractAddress) return;
+    setIsApproving(true);
+    try {
+      await writeErc20({
         address: CLAWD_TOKEN,
         abi: erc20Abi,
         functionName: "approve",
-        args: [deployedContract.address, STAKE_AMOUNT],
+        args: [contractAddress as `0x${string}`, STAKE_AMOUNT],
       });
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
-      // Then stake
+      setTimeout(onRefetch, 2000);
+    } catch (e) {
+      console.error("Approve failed:", e);
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleStake = async () => {
+    setIsStaking(true);
+    try {
       await writeMarket({
         functionName: "stake",
         args: [BigInt(id)],
       });
+      setTimeout(onRefetch, 2000);
     } catch (e) {
       console.error("Stake failed:", e);
     } finally {
@@ -140,23 +273,62 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
                 <div className="text-sm opacity-60">
                   {Number(stakerCount)} staker{Number(stakerCount) !== 1 ? "s" : ""} · ID #{id}
                 </div>
+                {userShares !== undefined && userShares > 0n && (
+                  <div className="text-sm font-semibold text-accent">
+                    🎟️ Your shares: {Number(userShares).toLocaleString()}
+                  </div>
+                )}
                 <div className="text-xs opacity-40 truncate">
                   by {submitter?.slice(0, 6)}...{submitter?.slice(-4)}
                 </div>
               </div>
-              {!isTimedOut && address && address?.toLowerCase() !== submitter?.toLowerCase() && (
-                <button
-                  className="btn btn-primary btn-lg text-xl font-black tracking-wide"
-                  onClick={handleStake}
-                  disabled={isStaking}
-                >
-                  {isStaking ? <span className="loading loading-spinner loading-md"></span> : "💰 LOCK IN"}
-                </button>
-              )}
+              {!isTimedOut &&
+                address &&
+                address?.toLowerCase() !== submitter?.toLowerCase() &&
+                (!isOnBase ? (
+                  <button
+                    className="btn btn-warning btn-lg text-xl font-black tracking-wide"
+                    onClick={handleSwitchNetwork}
+                    disabled={isSwitching}
+                  >
+                    {isSwitching ? (
+                      <>
+                        <span className="loading loading-spinner loading-md"></span> Switching...
+                      </>
+                    ) : (
+                      "🔄 Switch to Base"
+                    )}
+                  </button>
+                ) : hasEnoughAllowance ? (
+                  <button
+                    className="btn btn-primary btn-lg text-xl font-black tracking-wide"
+                    onClick={handleStake}
+                    disabled={isStaking}
+                  >
+                    {isStaking ? (
+                      <>
+                        <span className="loading loading-spinner loading-md"></span> Locking in...
+                      </>
+                    ) : (
+                      "💵 Lock in"
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-secondary btn-lg text-xl font-black tracking-wide"
+                    onClick={handleApprove}
+                    disabled={isApproving}
+                  >
+                    {isApproving ? (
+                      <>
+                        <span className="loading loading-spinner loading-md"></span> Approving...
+                      </>
+                    ) : (
+                      "💵 Buy Shares"
+                    )}
+                  </button>
+                ))}
             </div>
-            {myShares !== undefined && myShares > 0n && (
-              <div className="text-xs text-success mt-1">Your shares: {mySharesFormatted}</div>
-            )}
           </div>
         </div>
       </div>
@@ -168,48 +340,72 @@ function SubmissionCard({ id, rank, isTimedOut }: { id: number; rank: number; is
 //                     SUBMIT FORM
 // ═══════════════════════════════════════════════════════════
 
-function SubmitForm() {
-  const STAKE_AMOUNT = useStakeAmount();
+function SubmitForm({
+  allowance,
+  hasSubmitted,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  pendingIds,
+  onRefetch,
+  contractAddress,
+}: {
+  allowance: bigint;
+  hasSubmitted: boolean;
+  pendingIds: readonly bigint[] | undefined;
+  onRefetch: () => void;
+  contractAddress: string | undefined;
+}) {
   const [imageUrl, setImageUrl] = useState("");
+  const [isSwitching, setIsSwitching] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  const isOnBase = chainId === base.id;
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
   const { writeContractAsync: writeErc20 } = useWriteContract();
-  const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
-  const publicClient = usePublicClient();
 
-  const { data: hasSubmitted } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "hasSubmitted",
-    args: [address],
-  });
+  const hasEnoughAllowance = allowance >= STAKE_AMOUNT;
 
-  // Get pending submissions to show user their image before whitelist
-  const { data: pendingIds } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getPendingSubmissions",
-    args: [0n, 50n],
-  });
-
-  const handleSubmit = async () => {
-    if (!imageUrl || !deployedContract || !publicClient) return;
-    setIsSubmitting(true);
+  const handleSwitchNetwork = async () => {
+    setIsSwitching(true);
     try {
-      // First approve CLAWD spending
-      const approveTx = await writeErc20({
+      await switchChain({ chainId: base.id });
+    } catch (e) {
+      console.error("Switch network failed:", e);
+    } finally {
+      setIsSwitching(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!contractAddress) return;
+    setIsApproving(true);
+    try {
+      await writeErc20({
         address: CLAWD_TOKEN,
         abi: erc20Abi,
         functionName: "approve",
-        args: [deployedContract.address, STAKE_AMOUNT],
+        args: [contractAddress as `0x${string}`, STAKE_AMOUNT],
       });
-      // Wait for approval to be mined
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
-      // Then submit
+      setTimeout(onRefetch, 2000);
+    } catch (e) {
+      console.error("Approve failed:", e);
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!imageUrl) return;
+    setIsSubmitting(true);
+    try {
       await writeMarket({
         functionName: "submit",
         args: [imageUrl],
       });
       setImageUrl("");
+      setTimeout(onRefetch, 2000);
     } catch (e) {
       console.error("Submit failed:", e);
     } finally {
@@ -229,7 +425,14 @@ function SubmitForm() {
   }
 
   if (hasSubmitted) {
-    return <PendingSubmissionCard address={address} pendingIds={pendingIds} />;
+    return (
+      <div className="card bg-base-100 shadow-xl border-2 border-warning">
+        <div className="card-body">
+          <h3 className="card-title text-xl">⏳ Your Submission is Pending Review</h3>
+          <p className="text-sm opacity-60">Clawd will review and whitelist images shortly.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -237,7 +440,8 @@ function SubmitForm() {
       <div className="card-body">
         <h3 className="card-title text-xl">🦞 Submit Your Image</h3>
         <p className="text-sm opacity-60">
-          Submit an image URL + stake {Number(formatEther(STAKE_AMOUNT)).toLocaleString()} $CLAWD. Make it a lobster AI agent with a wallet and dapp building tools!
+          Submit an image URL + stake {Number(formatEther(STAKE_AMOUNT)).toLocaleString()} $CLAWD. Make it a lobster AI
+          agent with a wallet and dapp building tools!
         </p>
         <div className="flex gap-2">
           <input
@@ -247,9 +451,37 @@ function SubmitForm() {
             value={imageUrl}
             onChange={e => setImageUrl(e.target.value)}
           />
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={!imageUrl || isSubmitting}>
-            {isSubmitting ? <span className="loading loading-spinner loading-sm"></span> : "Submit & Stake"}
-          </button>
+          {!isOnBase ? (
+            <button className="btn btn-warning" onClick={handleSwitchNetwork} disabled={isSwitching}>
+              {isSwitching ? (
+                <>
+                  <span className="loading loading-spinner loading-sm"></span> Switching...
+                </>
+              ) : (
+                "🔄 Switch to Base"
+              )}
+            </button>
+          ) : hasEnoughAllowance ? (
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={!imageUrl || isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <span className="loading loading-spinner loading-sm"></span> Submitting...
+                </>
+              ) : (
+                "Submit & Stake"
+              )}
+            </button>
+          ) : (
+            <button className="btn btn-secondary" onClick={handleApprove} disabled={isApproving}>
+              {isApproving ? (
+                <>
+                  <span className="loading loading-spinner loading-sm"></span> Approving...
+                </>
+              ) : (
+                "✅ Approve $CLAWD"
+              )}
+            </button>
+          )}
         </div>
         {imageUrl && (
           <div className="mt-2">
@@ -269,93 +501,34 @@ function SubmitForm() {
   );
 }
 
-// Show user their pending submission with image
-function PendingSubmissionCard({ address, pendingIds }: { address: string | undefined; pendingIds: readonly bigint[] | undefined }) {
-  // Try to find user's submission among pending
-  const ids = pendingIds ?? [];
-  
-  return (
-    <div className="card bg-base-100 shadow-xl border-2 border-warning">
-      <div className="card-body">
-        <h3 className="card-title text-xl">⏳ Your Submission is Pending Review</h3>
-        <p className="text-sm opacity-60">Clawd will review and whitelist images shortly. You can still stake on other approved images!</p>
-        {ids.map((id) => (
-          <PendingSubmissionImage key={id.toString()} id={id} address={address} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PendingSubmissionImage({ id, address }: { id: bigint; address: string | undefined }) {
-  const { data: submission } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getSubmission",
-    args: [id],
-  });
-
-  if (!submission) return null;
-  const [submitter, imageUrl] = submission;
-  
-  // Only show if this is the connected user's submission
-  if (submitter?.toLowerCase() !== address?.toLowerCase()) return null;
-
-  return (
-    <div className="flex items-center gap-4 mt-2">
-      <img
-        src={imageUrl}
-        alt="Your submission"
-        className="w-24 h-24 object-cover rounded-lg border-2 border-warning"
-        onError={e => {
-          (e.target as HTMLImageElement).src = "https://placehold.co/200x200/1a1a2e/e94560?text=🦞";
-        }}
-      />
-      <div>
-        <div className="badge badge-warning">Pending Review</div>
-        <div className="text-xs opacity-40 mt-1">ID #{id.toString()}</div>
-      </div>
-    </div>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════
 //                     ADMIN PANEL
 // ═══════════════════════════════════════════════════════════
 
-function AdminPanel() {
+function AdminPanel({
+  admin,
+  pendingIds,
+  winnerPicked,
+  topSubmissions,
+  deadline,
+  onRefetch,
+  contractAddress,
+  abi,
+}: {
+  admin: string | undefined;
+  pendingIds: readonly bigint[] | undefined;
+  winnerPicked: boolean;
+  topSubmissions: readonly [readonly bigint[], readonly bigint[]] | undefined;
+  deadline: bigint | undefined;
+  onRefetch: () => void;
+  contractAddress: string | undefined;
+  abi: any;
+}) {
   const { address } = useAccount();
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [initialized, setInitialized] = useState(false);
 
-  const { data: pendingIds } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getPendingSubmissions",
-    args: [0n, 50n],
-  });
-
-  const { data: winnerPicked } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "winnerPicked",
-  });
-
-  const { data: deadline } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "deadline",
-  });
-
-  const { data: topSubmissions } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getTopSubmissions",
-    args: [0n, 3n],
-  });
-
-  const { data: contractAdmin } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "admin",
-  });
-
-  // Auto-check all pending when they first load
   useEffect(() => {
     if (pendingIds && pendingIds.length > 0 && !initialized) {
       setCheckedIds(new Set(pendingIds.map((id: bigint) => id.toString())));
@@ -366,7 +539,7 @@ function AdminPanel() {
     }
   }, [pendingIds, initialized]);
 
-  const isAdmin = address && contractAdmin && address.toLowerCase() === contractAdmin.toLowerCase();
+  const isAdmin = address && admin && address.toLowerCase() === admin.toLowerCase();
   if (!isAdmin) return null;
 
   const isTimedOut = deadline ? Math.floor(Date.now() / 1000) >= Number(deadline) : false;
@@ -375,11 +548,8 @@ function AdminPanel() {
     const key = id.toString();
     setCheckedIds(prev => {
       const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -388,66 +558,49 @@ function AdminPanel() {
     if (checkedIds.size === 0) return;
     const idsToWhitelist = Array.from(checkedIds).map(s => BigInt(s));
     try {
-      await writeMarket({
-        functionName: "whitelistBatch",
-        args: [idsToWhitelist],
-      });
+      await writeMarket({ functionName: "whitelistBatch", args: [idsToWhitelist] });
       setCheckedIds(new Set());
       setInitialized(false);
+      setTimeout(onRefetch, 2000);
     } catch (e) {
       console.error("Whitelist failed:", e);
     }
   };
 
-  const handleBan = async (id: bigint) => {
-    try {
-      await writeMarket({
-        functionName: "banAndSlash",
-        args: [id],
-      });
-    } catch (e) {
-      console.error("Ban failed:", e);
-    }
-  };
-
   const handlePickWinner = async (id: bigint) => {
     try {
-      await writeMarket({
-        functionName: "pickWinner",
-        args: [id],
-      });
+      await writeMarket({ functionName: "pickWinner", args: [id] });
+      setTimeout(onRefetch, 2000);
     } catch (e) {
       console.error("Pick winner failed:", e);
     }
   };
-
-  const checkedCount = checkedIds.size;
 
   return (
     <div className="card bg-warning/10 shadow-xl border border-warning">
       <div className="card-body">
         <h3 className="card-title text-xl">🔐 Admin Panel</h3>
 
-        {/* Pending Submissions */}
         <div className="mb-4">
-          <h4 className="font-bold mb-2">Pending Submissions ({pendingIds ? pendingIds.length : 0})</h4>
+          <h4 className="font-bold mb-2">Pending Submissions ({pendingIds?.length ?? 0})</h4>
           {pendingIds && pendingIds.length > 0 ? (
             <>
               <button
                 className="btn btn-success btn-sm mb-2"
                 onClick={handleWhitelistChecked}
-                disabled={checkedCount === 0}
+                disabled={checkedIds.size === 0}
               >
-                ✅ Whitelist Selected ({checkedCount})
+                ✅ Whitelist Selected ({checkedIds.size})
               </button>
               <div className="space-y-2">
                 {pendingIds.map((id: bigint) => (
                   <PendingCard
                     key={id.toString()}
-                    id={Number(id)}
+                    id={id}
                     checked={checkedIds.has(id.toString())}
                     onToggle={() => toggleCheck(id)}
-                    onBan={() => handleBan(id)}
+                    contractAddress={contractAddress}
+                    abi={abi}
                   />
                 ))}
               </div>
@@ -457,13 +610,19 @@ function AdminPanel() {
           )}
         </div>
 
-        {/* Pick Winner */}
-        {isTimedOut && !winnerPicked && topSubmissions && (
+        {isTimedOut && !winnerPicked && topSubmissions && topSubmissions[0]?.length > 0 && (
           <div>
-            <h4 className="font-bold mb-2">🏆 Pick Winner (Top 10)</h4>
+            <h4 className="font-bold mb-2">🏆 Pick Winner</h4>
             <div className="space-y-2">
-              {topSubmissions[0]?.map((id: bigint, i: number) => (
-                <WinnerPickCard key={id.toString()} id={Number(id)} rank={i + 1} onPick={() => handlePickWinner(id)} />
+              {topSubmissions[0].map((id: bigint, i: number) => (
+                <WinnerPickCard
+                  key={id.toString()}
+                  id={id}
+                  rank={i + 1}
+                  onPick={() => handlePickWinner(id)}
+                  contractAddress={contractAddress}
+                  abi={abi}
+                />
               ))}
             </div>
           </div>
@@ -483,19 +642,16 @@ function PendingCard({
   id,
   checked,
   onToggle,
-  onBan,
+  contractAddress,
+  abi,
 }: {
-  id: number;
+  id: bigint;
   checked: boolean;
   onToggle: () => void;
-  onBan: () => void;
+  contractAddress: string | undefined;
+  abi: any;
 }) {
-  const { data: submission } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getSubmission",
-    args: [BigInt(id)],
-  });
-
+  const submission = useSubmissionData(id, contractAddress, abi);
   if (!submission) return null;
   const [submitter, imageUrl] = submission;
 
@@ -504,10 +660,10 @@ function PendingCard({
       <input type="checkbox" className="checkbox checkbox-success checkbox-sm" checked={checked} onChange={onToggle} />
       <img
         src={imageUrl}
-        alt={`Pending #${id}`}
+        alt={`Pending`}
         className="w-16 h-16 object-cover rounded"
         onError={e => {
-          (e.target as HTMLImageElement).src = "https://placehold.co/100x100/1a1a2e/e94560?text=?";
+          (e.target as HTMLImageElement).src = "https://placehold.co/100x100?text=?";
         }}
       />
       <div className="flex-1 min-w-0">
@@ -516,20 +672,24 @@ function PendingCard({
           by {submitter?.slice(0, 6)}...{submitter?.slice(-4)}
         </div>
       </div>
-      <button className="btn btn-error btn-xs" onClick={onBan}>
-        🔥 Ban & Slash
-      </button>
     </div>
   );
 }
 
-function WinnerPickCard({ id, rank, onPick }: { id: number; rank: number; onPick: () => void }) {
-  const { data: submission } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getSubmission",
-    args: [BigInt(id)],
-  });
-
+function WinnerPickCard({
+  id,
+  rank,
+  onPick,
+  contractAddress,
+  abi,
+}: {
+  id: bigint;
+  rank: number;
+  onPick: () => void;
+  contractAddress: string | undefined;
+  abi: any;
+}) {
+  const submission = useSubmissionData(id, contractAddress, abi);
   if (!submission) return null;
   const [, imageUrl, totalStaked] = submission;
 
@@ -541,14 +701,14 @@ function WinnerPickCard({ id, rank, onPick }: { id: number; rank: number; onPick
         alt={`#${id}`}
         className="w-16 h-16 object-cover rounded"
         onError={e => {
-          (e.target as HTMLImageElement).src = "https://placehold.co/100x100/1a1a2e/e94560?text=🦞";
+          (e.target as HTMLImageElement).src = "https://placehold.co/100x100?text=🦞";
         }}
       />
       <div className="flex-1">
         <div className="text-sm font-bold">{Number(formatEther(totalStaked)).toLocaleString()} $CLAWD</div>
       </div>
       <button className="btn btn-primary btn-sm" onClick={onPick}>
-        👑 Pick This One
+        👑 Pick
       </button>
     </div>
   );
@@ -558,22 +718,9 @@ function WinnerPickCard({ id, rank, onPick }: { id: number; rank: number; onPick
 //                    CLAIM REWARDS
 // ═══════════════════════════════════════════════════════════
 
-function ClaimRewards() {
-  const { address } = useAccount();
+function ClaimRewards({ canClaim, claimAmount }: { canClaim: boolean; claimAmount: bigint | undefined }) {
   const [isClaiming, setIsClaiming] = useState(false);
   const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
-
-  const { data: canClaim } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "canClaim",
-    args: [address],
-  });
-
-  const { data: claimAmount } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getClaimAmount",
-    args: [address],
-  });
 
   const handleClaim = async () => {
     setIsClaiming(true);
@@ -586,20 +733,20 @@ function ClaimRewards() {
     }
   };
 
-  if (!canClaim || !address) return null;
+  if (!canClaim) return null;
 
   return (
     <div className="card bg-gradient-to-r from-green-800 to-emerald-700 shadow-xl border-2 border-success">
       <div className="card-body text-center">
         <h3 className="card-title text-2xl justify-center">🎉 You Won!</h3>
         <p className="text-lg">
-          You have <span className="font-bold">{claimAmount ? Number(formatEther(claimAmount)).toLocaleString() : "..."} $CLAWD</span> to claim
+          You have{" "}
+          <span className="font-bold">
+            {claimAmount ? Number(formatEther(claimAmount)).toLocaleString() : "..."} $CLAWD
+          </span>{" "}
+          to claim
         </p>
-        <button
-          className="btn btn-success btn-lg text-xl font-black mt-2"
-          onClick={handleClaim}
-          disabled={isClaiming}
-        >
+        <button className="btn btn-success btn-lg text-xl font-black mt-2" onClick={handleClaim} disabled={isClaiming}>
           {isClaiming ? <span className="loading loading-spinner loading-md"></span> : "💰 CLAIM REWARDS"}
         </button>
       </div>
@@ -612,46 +759,28 @@ function ClaimRewards() {
 // ═══════════════════════════════════════════════════════════
 
 const Home: NextPage = () => {
-  const STAKE_AMOUNT = useStakeAmount();
+  const state = usePFPMarketState();
+  const {
+    deadline,
+    totalPool,
+    winnerPicked,
+    winningId,
+    timeRemaining,
+    admin,
+    topSubmissions,
+    pendingIds,
+    hasSubmitted,
+    canClaim,
+    claimAmount,
+    allowance,
+    refetch,
+    contractAddress,
+    abi,
+  } = state;
 
-  const { data: deadline } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "deadline",
-  });
+  // Fetch winner submission only when needed
+  const winnerSubmission = useSubmissionData(winnerPicked ? (winningId ?? 0n) : undefined, contractAddress, abi);
 
-  const { data: topSubmissions } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getTopSubmissions",
-    args: [0n, 3n],
-  });
-
-  const { data: totalPool } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "totalPool",
-  });
-
-  const { data: winnerPicked } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "winnerPicked",
-  });
-
-  const { data: winningId } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "winningId",
-  });
-
-  const { data: winnerSubmission } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "getSubmission",
-    args: [winnerPicked ? (winningId ?? 0n) : 0n],
-  });
-
-  const { data: timeRemaining } = useScaffoldReadContract({
-    contractName: "ClawdPFPMarket",
-    functionName: "timeRemaining",
-  });
-
-  // Use chain-reported timeRemaining (accurate on forks) with browser-time fallback
   const isTimedOut =
     timeRemaining !== undefined
       ? timeRemaining === 0n
@@ -665,13 +794,11 @@ const Home: NextPage = () => {
       <div className="w-full bg-gradient-to-br from-red-900 via-orange-900 to-red-800 py-8 px-4">
         <div className="max-w-3xl mx-auto text-center">
           <CountdownTimer deadline={deadline} winnerPicked={!!winnerPicked} />
-
           {totalPool !== undefined && (
             <div className="mt-4 text-2xl font-bold">
               💰 Total Pool: {Number(formatEther(totalPool)).toLocaleString()} $CLAWD
             </div>
           )}
-
           <div className="flex justify-center gap-4 mt-2 text-sm opacity-60">
             <span>🔥 25% burned</span>
             <span>🎨 10% to winning OP</span>
@@ -696,14 +823,28 @@ const Home: NextPage = () => {
       )}
 
       <div className="max-w-3xl w-full px-4 py-8 space-y-6">
-        {/* Claim Rewards */}
-        {winnerPicked && <ClaimRewards />}
+        {winnerPicked && <ClaimRewards canClaim={!!canClaim} claimAmount={claimAmount} />}
 
-        {/* Submit Form */}
-        {!isTimedOut && !winnerPicked && <SubmitForm />}
+        {!isTimedOut && !winnerPicked && (
+          <SubmitForm
+            allowance={allowance ?? 0n}
+            hasSubmitted={!!hasSubmitted}
+            pendingIds={pendingIds}
+            onRefetch={refetch}
+            contractAddress={contractAddress}
+          />
+        )}
 
-        {/* Admin Panel */}
-        <AdminPanel />
+        <AdminPanel
+          admin={admin}
+          pendingIds={pendingIds}
+          winnerPicked={!!winnerPicked}
+          topSubmissions={topSubmissions}
+          deadline={deadline}
+          onRefetch={refetch}
+          contractAddress={contractAddress}
+          abi={abi}
+        />
 
         {/* Leaderboard */}
         <div>
@@ -716,6 +857,10 @@ const Home: NextPage = () => {
                   id={Number(id)}
                   rank={i + 1}
                   isTimedOut={isTimedOut || !!winnerPicked}
+                  allowance={allowance ?? 0n}
+                  onRefetch={refetch}
+                  contractAddress={contractAddress}
+                  abi={abi}
                 />
               ))}
             </div>
