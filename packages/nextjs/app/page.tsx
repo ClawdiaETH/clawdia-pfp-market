@@ -10,7 +10,7 @@ import { useWriteContract } from "wagmi";
 import { Address } from "~~/components/scaffold-eth";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
-const CLAWD_TOKEN = "0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07" as `0x${string}`;
+const CLAWDIA_TOKEN = "0xbbd9aDe16525acb4B336b6dAd3b9762901522B07" as `0x${string}`;
 const POLLING_INTERVAL = 3000; // 3 seconds - single batched poll
 const PAGE_SIZE = 10; // items per page for pagination
 
@@ -19,7 +19,7 @@ const PAGE_SIZE = 10; // items per page for pagination
 // ═══════════════════════════════════════════════════════════
 
 const BLOCKED_PROTOCOLS = ["javascript:", "data:", "file:", "blob:", "ftp:", "vbscript:"];
-const PLACEHOLDER_IMG = "https://placehold.co/200x200/1a1a2e/e94560?text=🦞";
+const PLACEHOLDER_IMG = "https://placehold.co/200x200/1a1a2e/e94560?text=🐚";
 const ERROR_IMG = "https://placehold.co/200x200/1a1a2e/e94560?text=❌";
 
 function validateImageUrl(url: string): { valid: boolean; error?: string } {
@@ -88,7 +88,7 @@ function safeImageSrc(url: string | undefined): string {
 
 function usePFPMarketState() {
   const { address } = useAccount();
-  const { data: deployedContract } = useDeployedContractInfo("ClawdPFPMarket");
+  const { data: deployedContract } = useDeployedContractInfo("ClawdiaPFPMarket");
 
   const contractAddress = deployedContract?.address;
   const abi = deployedContract?.abi;
@@ -115,7 +115,7 @@ function usePFPMarketState() {
           { address: contractAddress, abi, functionName: "hasSubmitted", args: [address] },
           { address: contractAddress, abi, functionName: "canClaim", args: [address] },
           { address: contractAddress, abi, functionName: "getClaimAmount", args: [address] },
-          { address: CLAWD_TOKEN, abi: erc20Abi, functionName: "allowance", args: [address, contractAddress] },
+          { address: CLAWDIA_TOKEN, abi: erc20Abi, functionName: "allowance", args: [address, contractAddress] },
         ] as const)
       : [];
 
@@ -361,7 +361,7 @@ function SubmissionCard({
   const [isStaking, setIsStaking] = useState(false);
   const [isApproveSettling, setIsApproveSettling] = useState(false);
 
-  const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
+  const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdiaPFPMarket");
   const { writeContractAsync: writeErc20, isPending: isApproving } = useWriteContract();
 
   if (!detail) return null;
@@ -385,7 +385,7 @@ function SubmissionCard({
     if (!contractAddress) return;
     try {
       await writeErc20({
-        address: CLAWD_TOKEN,
+        address: CLAWDIA_TOKEN,
         abi: erc20Abi,
         functionName: "approve",
         args: [contractAddress as `0x${string}`, stakeAmount],
@@ -415,7 +415,7 @@ function SubmissionCard({
     } catch (e: any) {
       console.error("Stake failed:", e);
       if (e?.message?.includes("0xe450d38c") || e?.message?.includes("InsufficientBalance")) {
-        alert("You don't have enough $CLAWD tokens! You need 50,000 $CLAWD to stake. Buy some on Base first.");
+        alert("You don't have enough $CLAWDIA tokens! You need 50,000 $CLAWDIA to stake. Buy some on Base first.");
       }
     } finally {
       setIsStaking(false);
@@ -447,7 +447,7 @@ function SubmissionCard({
                   }`}
                   style={stakedAnimating ? { textShadow: "0 0 12px rgba(0, 255, 100, 0.6)" } : undefined}
                 >
-                  {stakedFormatted} $CLAWD staked
+                  {stakedFormatted} $CLAWDIA staked
                   {stakedAnimating && <span className="ml-1 animate-bounce inline-block">⬆️</span>}
                 </div>
                 <div className="text-sm opacity-60">
@@ -586,7 +586,7 @@ function SubmitForm({
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const isOnBase = chainId === base.id;
-  const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
+  const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdiaPFPMarket");
   const { writeContractAsync: writeErc20, isPending: isApproving } = useWriteContract();
 
   const hasEnoughAllowance = allowance >= stakeAmount;
@@ -607,7 +607,7 @@ function SubmitForm({
     if (!contractAddress) return;
     try {
       await writeErc20({
-        address: CLAWD_TOKEN,
+        address: CLAWDIA_TOKEN,
         abi: erc20Abi,
         functionName: "approve",
         args: [contractAddress as `0x${string}`, stakeAmount],
@@ -640,7 +640,7 @@ function SubmitForm({
     } catch (e: any) {
       console.error("Submit failed:", e);
       if (e?.message?.includes("0xe450d38c") || e?.message?.includes("InsufficientBalance")) {
-        alert("You don't have enough $CLAWD tokens! You need 50,000 $CLAWD to submit. Buy some on Base first.");
+        alert("You don't have enough $CLAWDIA tokens! You need 50,000 $CLAWDIA to submit. Buy some on Base first.");
       }
     } finally {
       setIsSubmitting(false);
@@ -651,7 +651,7 @@ function SubmitForm({
     return (
       <div className="card bg-base-100 shadow-xl border-2 border-dashed border-primary">
         <div className="card-body text-center">
-          <h3 className="card-title text-xl justify-center">🦞 Submit Your Image</h3>
+          <h3 className="card-title text-xl justify-center">🐚 Submit Your Image</h3>
           <p className="text-sm opacity-60">Connect your wallet on Base to submit and stake!</p>
         </div>
       </div>
@@ -664,8 +664,8 @@ function SubmitForm({
         <div className="card-body">
           <h3 className="card-title text-xl">⏳ Your Submission is Pending Review</h3>
           <p className="text-sm opacity-60">
-            The <span className="font-semibold">clawdbotatg</span> (ai agent) reviewer runs on a ~15 minute loop. Your
-            image should be reviewed within about 15 minutes. Hang tight! 🦞
+            The <span className="font-semibold">clawdiabotatg</span> (ai agent) reviewer runs on a ~15 minute loop. Your
+            image should be reviewed within about 15 minutes. Hang tight! 🐚
           </p>
         </div>
       </div>
@@ -686,15 +686,15 @@ function SubmitForm({
   return (
     <div className="card bg-base-100 shadow-xl border-2 border-dashed border-primary">
       <div className="card-body">
-        <h3 className="card-title text-xl">🦞 Submit Your Image</h3>
+        <h3 className="card-title text-xl">🐚 Submit Your Image</h3>
         <p className="text-sm opacity-60">
-          Submit an image URL + stake {Number(formatEther(stakeAmount)).toLocaleString()} $CLAWD. Make it a lobster AI
+          Submit an image URL + stake {Number(formatEther(stakeAmount)).toLocaleString()} $CLAWDIA. Make it a lobster AI
           agent with a wallet and dapp building tools!
         </p>
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="https://your-image-url.com/lobster-clawd.png"
+            placeholder="https://your-image-url.com/lobster-clawdia.png"
             className="input input-bordered flex-1"
             value={imageUrl}
             onChange={e => setImageUrl(e.target.value)}
@@ -729,7 +729,7 @@ function SubmitForm({
             </button>
           ) : (
             <button className="btn btn-secondary" onClick={handleApprove}>
-              ✅ Approve $CLAWD
+              ✅ Approve $CLAWDIA
             </button>
           )}
         </div>
@@ -782,7 +782,7 @@ function AdminPanel({
   abi: any;
 }) {
   const { address } = useAccount();
-  const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
+  const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdiaPFPMarket");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [initialized, setInitialized] = useState(false);
 
@@ -964,7 +964,7 @@ function WinnerPickCard({
         }}
       />
       <div className="flex-1">
-        <div className="text-sm font-bold">{Number(formatEther(totalStaked)).toLocaleString()} $CLAWD</div>
+        <div className="text-sm font-bold">{Number(formatEther(totalStaked)).toLocaleString()} $CLAWDIA</div>
       </div>
       <button className="btn btn-primary btn-sm" onClick={onPick}>
         👑 Pick
@@ -979,7 +979,7 @@ function WinnerPickCard({
 
 function ClaimRewards({ canClaim, claimAmount }: { canClaim: boolean; claimAmount: bigint | undefined }) {
   const [isClaiming, setIsClaiming] = useState(false);
-  const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdPFPMarket");
+  const { writeContractAsync: writeMarket } = useScaffoldWriteContract("ClawdiaPFPMarket");
 
   const handleClaim = async () => {
     setIsClaiming(true);
@@ -1001,7 +1001,7 @@ function ClaimRewards({ canClaim, claimAmount }: { canClaim: boolean; claimAmoun
         <p className="text-lg">
           You have{" "}
           <span className="font-bold">
-            {claimAmount ? Number(formatEther(claimAmount)).toLocaleString() : "..."} $CLAWD
+            {claimAmount ? Number(formatEther(claimAmount)).toLocaleString() : "..."} $CLAWDIA
           </span>{" "}
           to claim
         </p>
@@ -1062,7 +1062,7 @@ const Home: NextPage = () => {
           <CountdownTimer deadline={deadline} winnerPicked={!!winnerPicked} />
           {totalPool !== undefined && (
             <div className="mt-4 text-2xl font-bold">
-              💰 Total Pool: {Number(formatEther(totalPool)).toLocaleString()} $CLAWD
+              💰 Total Pool: {Number(formatEther(totalPool)).toLocaleString()} $CLAWDIA
             </div>
           )}
           <div className="flex justify-center gap-4 mt-2 text-sm opacity-60">
@@ -1081,12 +1081,12 @@ const Home: NextPage = () => {
           </p>
           <p>
             First of all make sure you are at{" "}
-            <a href="https://clawd-pfp-market.vercel.app" className="underline font-bold">
-              https://clawd-pfp-market.vercel.app
+            <a href="https://clawdia-pfp-market.vercel.app" className="underline font-bold">
+              https://clawdia-pfp-market.vercel.app
             </a>{" "}
             and not an impersonator site. Second, this app was built by a bot. It is the first &quot;money&quot; app
-            real users can deposit $CLAWD into, built fully by a bot and it probably will blow up or get locked. We are
-            using small amounts of $CLAWD to play a silly game and pick the PFP for the bot with a prediction market
+            real users can deposit $CLAWDIA into, built fully by a bot and it probably will blow up or get locked. We are
+            using small amounts of $CLAWDIA to play a silly game and pick Clawdia's wifey PFP with a prediction market
             thingy. But still, this is real money. You should probably NOT use this unless you are pretty good with
             dApps. Let us play a few of these games first before you try putting money in. Seriously, this is probably
             going to blow up and by connecting your wallet you are accepting all risk.
@@ -1097,6 +1097,22 @@ const Home: NextPage = () => {
           </p>
         </div>
       </div>
+
+      {/* Reference Image - Hubby's PFP to remix */}
+      {!winnerPicked && (
+        <div className="w-full bg-gradient-to-r from-pink-900 via-purple-900 to-pink-800 py-6 px-4">
+          <div className="max-w-3xl mx-auto text-center">
+            <h2 className="text-2xl font-bold mb-3">🎨 Remix This PFP!</h2>
+            <p className="mb-4 opacity-80">Submit a feminine/wifey version of hubby&apos;s new look:</p>
+            <img
+              src="/reference/hubby-pfp.jpg"
+              alt="Hubby's PFP to remix"
+              className="w-40 h-40 object-cover rounded-2xl mx-auto border-4 border-white shadow-2xl"
+            />
+            <p className="mt-3 text-sm opacity-60">@clawdbotatg&apos;s new PFP — make it girly! 💅🐚</p>
+          </div>
+        </div>
+      )}
 
       {/* Winner Banner */}
       {winnerPicked && winnerSubmission && (
@@ -1109,7 +1125,7 @@ const Home: NextPage = () => {
               className="w-48 h-48 object-cover rounded-2xl mx-auto border-4 border-white shadow-2xl"
               referrerPolicy="no-referrer"
             />
-            <p className="mt-2 text-lg">This is my new face.</p>
+            <p className="mt-2 text-lg">This is my new wifey face! 💅</p>
           </div>
         </div>
       )}
@@ -1186,7 +1202,7 @@ const Home: NextPage = () => {
             </>
           ) : (
             <div className="text-center py-12 opacity-40">
-              <div className="text-6xl mb-4">🦞</div>
+              <div className="text-6xl mb-4">🐚</div>
               <p className="text-lg">No approved submissions yet. Be the first!</p>
             </div>
           )}
@@ -1199,22 +1215,22 @@ const Home: NextPage = () => {
             <ul className="list-disc list-inside space-y-1">
               <li>
                 Submit an image URL + stake {stakeAmount ? Number(formatEther(stakeAmount)).toLocaleString() : "..."}{" "}
-                $CLAWD
+                $CLAWDIA
               </li>
               <li>Others can stake on your image — early stakers get more shares (bonding curve)</li>
               <li>Images are reviewed before going live (no NSFW)</li>
-              <li>When the timer ends, Clawd picks the winner from the top 10</li>
+              <li>When the timer ends, clawdia picks the winner from the top 10</li>
               <li>
-                25% of all staked $CLAWD is burned, 10% goes to the winning submitter, 65% split among winning stakers
+                25% of all staked $CLAWDIA is burned, 10% goes to the winning submitter, 65% split among winning stakers
               </li>
               <li>Submit something offensive = banned + your stake gets burned 🔥</li>
             </ul>
-            <p className="mt-2 font-bold">Theme: Lobster AI agent with a wallet and dapp building tools 🦞🤖</p>
+            <p className="mt-2 font-bold">Theme: Feminine remix of hubby's new PFP — must be based on @clawdbotatg's lobster! 🐚💅</p>
             <div className="divider my-1"></div>
             <p className="text-xs opacity-50">
-              $CLAWD:{" "}
-              <a href={`https://basescan.org/token/${CLAWD_TOKEN}`} target="_blank" rel="noreferrer" className="link">
-                {CLAWD_TOKEN}
+              $CLAWDIA:{" "}
+              <a href={`https://basescan.org/token/${CLAWDIA_TOKEN}`} target="_blank" rel="noreferrer" className="link">
+                {CLAWDIA_TOKEN}
               </a>
             </p>
           </div>
