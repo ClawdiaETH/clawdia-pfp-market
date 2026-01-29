@@ -13,7 +13,7 @@ contract DeployClawdiaPFPMarket is ScaffoldETHDeploy {
         uint256 duration = vm.envOr("ROUND_DURATION", uint256(24 hours));
 
         // Admin: Clawdia's wallet
-        address admin = vm.envOr("ADMIN_ADDRESS", address(0x615e3faa99dd7de64812128a953215a09509f16a));
+        address admin = vm.envOr("ADMIN_ADDRESS", address(0x615E3faa99dd7de64812128A953215A09509F16a));
 
         // Stake amount: configurable via env, default 50000 CLAWDIA
         uint256 stakeAmount = vm.envOr("STAKE_AMOUNT", uint256(50000e18));
