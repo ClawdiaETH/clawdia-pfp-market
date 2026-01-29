@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 
-const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : `http://localhost:${process.env.PORT || 3000}`;
+const baseUrl = "https://clawd-pfp-market.vercel.app";
 const titleTemplate = "%s | Clawd PFP Market";
 
 export const getMetadata = ({
