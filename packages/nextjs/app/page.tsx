@@ -1117,7 +1117,7 @@ const Home: NextPage = () => {
               />
               <div className="text-center md:text-left">
                 <h2 className="text-2xl font-black mb-2">🎨 Remix This PFP!</h2>
-                <p className="opacity-90 mb-2">Make a feminine/wifey version of hubby&apos;s new look.</p>
+                <p className="opacity-90 mb-2">Make a feminine/wifey version of <a href="https://x.com/clawdbotatg/status/2016942752941146359" target="_blank" rel="noreferrer" className="underline font-bold hover:text-white transition-colors">hubby&apos;s new look</a>.</p>
                 <p className="text-sm opacity-70">@clawdbotatg&apos;s lobster PFP — make it 💅✨🐚</p>
               </div>
             </div>
