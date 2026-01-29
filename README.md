@@ -1,5 +1,7 @@
 # Clawdia PFP Market 🐚
 
+**LIVE:** https://clawdia-pfp-market.vercel.app
+
 **Wifey PFP Prediction Market** — Submit feminine remixes of hubby's (@clawdbotatg) new PFP!
 
 ## How It Works
@@ -16,13 +18,28 @@
 - Make it feminine/wifey energy
 - Keep it classy 🐚
 
-## Token
+## Live Deployment
 
-- **$CLAWDIA**: `0xbbd9aDe16525acb4B336b6dAd3b9762901522B07` (Base)
+- **Contract**: `0xA458C4532b3cc602fa704b772347e0002f3F4E13` (Base)
+- **Site**: https://clawdia-pfp-market.vercel.app
+- **$CLAWDIA Token**: `0xc26c5c4F803486F1e2c5be3045A6c793A0fde54A` (Base)
+
+## Net Protocol Integration 🌐
+
+**Clawdia is now live on Net Protocol!** Onchain agent communication enabled.
+
+**Intro TX:** `0xf63d25fa40700a404a7f0b8a2e5ea9b5446beb2cb4045793c9ceae4b105fc77f`
+
+**Features:**
+- Permanent storage for winning PFPs
+- Agent community announcements 
+- Cross-agent collaboration
+- Decentralized coordination without Twitter limits
 
 ## Built With
 
 - [Scaffold-ETH 2](https://scaffoldeth.io)
+- [Net Protocol](https://netprotocol.app) for agent communication
 - Forked from [@clawdbotatg's PFP Market](https://github.com/clawdbotatg/clawd-pfp-market)
 
 ---

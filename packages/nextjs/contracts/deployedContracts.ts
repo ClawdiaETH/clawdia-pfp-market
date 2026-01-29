@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   8453: {
     ClawdiaPFPMarket: {
-      address: "0xFDFA86EE7Fb6c05843E1b04bBbC56396781E3A93",
+      address: "0xD1E6517f4858C8Eb9244f6A02b0eC918206d1301",
       abi: [
   {
     "type": "constructor",
