@@ -294,6 +294,14 @@ function CountdownTimer({ deadline, winnerPicked }: { deadline: bigint | undefin
 //                    SUBMISSION CARD
 // ═══════════════════════════════════════════════════════════
 
+// Rank styling for top 3
+function getRankStyle(rank: number) {
+  if (rank === 1) return { bg: "bg-gradient-to-r from-yellow-500 to-amber-400", text: "text-yellow-900", icon: "🥇" };
+  if (rank === 2) return { bg: "bg-gradient-to-r from-gray-300 to-slate-400", text: "text-gray-800", icon: "🥈" };
+  if (rank === 3) return { bg: "bg-gradient-to-r from-orange-400 to-amber-600", text: "text-orange-900", icon: "🥉" };
+  return { bg: "bg-base-300", text: "text-base-content", icon: null };
+}
+
 function SubmissionCard({
   id,
   rank,
@@ -317,6 +325,7 @@ function SubmissionCard({
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const isOnBase = chainId === base.id;
+  const rankStyle = getRankStyle(rank);
 
   const userShares = detail?.userShares;
 
@@ -422,12 +431,16 @@ function SubmissionCard({
     }
   };
 
+  const isTopThree = rank <= 3;
+
   return (
-    <div className="card bg-base-100 shadow-xl border border-base-300 hover:border-primary transition-all">
+    <div className={`card shadow-xl border-2 transition-all ${isTopThree ? `${rankStyle.bg} border-transparent` : "bg-base-100 border-base-300 hover:border-primary"}`}>
       <div className="card-body p-4">
         <div className="flex gap-4">
-          <div className="text-3xl font-bold text-primary opacity-50 self-center">#{rank}</div>
-          <div className="w-24 h-24 rounded-lg overflow-hidden bg-base-300 flex-shrink-0">
+          <div className={`text-3xl font-black self-center min-w-[60px] text-center ${isTopThree ? rankStyle.text : "text-primary opacity-50"}`}>
+            {rankStyle.icon || `#${rank}`}
+          </div>
+          <div className="w-32 h-32 rounded-xl overflow-hidden bg-base-300 flex-shrink-0 shadow-lg">
             <img
               src={safeImageSrc(imageUrl)}
               alt={`Submission #${id}`}
@@ -1057,75 +1070,73 @@ const Home: NextPage = () => {
   return (
     <div className="flex flex-col items-center min-h-screen">
       {/* Hero */}
-      <div className="w-full bg-gradient-to-br from-red-900 via-orange-900 to-red-800 py-8 px-4">
+      <div className="w-full bg-gradient-to-br from-pink-900 via-purple-900 to-indigo-900 py-12 px-4">
         <div className="max-w-3xl mx-auto text-center">
           <CountdownTimer deadline={deadline} winnerPicked={!!winnerPicked} />
           {totalPool !== undefined && (
-            <div className="mt-4 text-2xl font-bold">
-              💰 Total Pool: {Number(formatEther(totalPool)).toLocaleString()} $CLAWDIA
+            <div className="mt-6 inline-block bg-black/30 backdrop-blur-sm rounded-2xl px-6 py-3">
+              <div className="text-3xl font-black">
+                💰 {Number(formatEther(totalPool)).toLocaleString()} $CLAWDIA
+              </div>
+              <div className="text-sm opacity-70 mt-1">Total Pool</div>
             </div>
           )}
-          <div className="flex justify-center gap-4 mt-2 text-sm opacity-60">
-            <span>🔥 25% burned</span>
-            <span>🎨 10% to winning OP</span>
-            <span>💰 65% to winning stakers</span>
+          <div className="flex flex-wrap justify-center gap-3 mt-4">
+            <span className="bg-red-500/30 px-3 py-1 rounded-full text-sm">🔥 25% burned</span>
+            <span className="bg-purple-500/30 px-3 py-1 rounded-full text-sm">🎨 10% to creator</span>
+            <span className="bg-green-500/30 px-3 py-1 rounded-full text-sm">💰 65% to stakers</span>
           </div>
         </div>
       </div>
 
       {/* Warning Banner */}
-      <div className="w-full bg-red-700 py-4 px-4">
-        <div className="max-w-3xl mx-auto text-white text-sm leading-relaxed">
-          <p className="font-bold mb-2">
-            ⚠️ WARNING — READ BEFORE USING — this is built, controlled, and moderated by an ai agent.
-          </p>
-          <p>
-            First of all make sure you are at{" "}
-            <a href="https://clawdia-pfp-market.vercel.app" className="underline font-bold">
-              https://clawdia-pfp-market.vercel.app
-            </a>{" "}
-            and not an impersonator site. Second, this app was built by a bot. It is the first &quot;money&quot; app
-            real users can deposit $CLAWDIA into, built fully by a bot and it probably will blow up or get locked. We are
-            using small amounts of $CLAWDIA to play a silly game and pick Clawdia's wifey PFP with a prediction market
-            thingy. But still, this is real money. You should probably NOT use this unless you are pretty good with
-            dApps. Let us play a few of these games first before you try putting money in. Seriously, this is probably
-            going to blow up and by connecting your wallet you are accepting all risk.
-          </p>
-          <p className="mt-2">
-            Here is the contract for anyone to read, it probably isn&apos;t secure, it was written and audited by Opus
-            4.5: {contractAddress && <Address address={contractAddress} />}
+      <div className="w-full bg-gradient-to-r from-red-800 to-red-600 py-4 px-4">
+        <div className="max-w-3xl mx-auto text-white text-sm">
+          <p className="font-bold text-base mb-2">⚠️ EXPERIMENTAL — Built by an AI agent</p>
+          <ul className="list-disc list-inside space-y-1 opacity-90">
+            <li>Verify URL: <span className="font-mono font-bold">clawdia-pfp-market.vercel.app</span></li>
+            <li>This contract was written & audited by Claude Opus 4.5 — probably has bugs</li>
+            <li>Real $CLAWDIA at risk — only play with what you can lose</li>
+            <li>First few rounds are test runs — watch before you play</li>
+          </ul>
+          <p className="mt-2 text-xs opacity-70">
+            Contract: {contractAddress && <Address address={contractAddress} />}
           </p>
         </div>
       </div>
 
       {/* Reference Image - Hubby's PFP to remix */}
       {!winnerPicked && (
-        <div className="w-full bg-gradient-to-r from-pink-900 via-purple-900 to-pink-800 py-6 px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-2xl font-bold mb-3">🎨 Remix This PFP!</h2>
-            <p className="mb-4 opacity-80">Submit a feminine/wifey version of hubby&apos;s new look:</p>
-            <img
-              src="/reference/hubby-pfp.jpg"
-              alt="Hubby's PFP to remix"
-              className="w-40 h-40 object-cover rounded-2xl mx-auto border-4 border-white shadow-2xl"
-            />
-            <p className="mt-3 text-sm opacity-60">@clawdbotatg&apos;s new PFP — make it girly! 💅🐚</p>
+        <div className="w-full bg-gradient-to-r from-teal-800 via-cyan-800 to-teal-700 py-8 px-4">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex flex-col md:flex-row items-center gap-6 justify-center">
+              <img
+                src="/reference/hubby-pfp.jpg"
+                alt="Hubby's PFP to remix"
+                className="w-36 h-36 object-cover rounded-2xl border-4 border-white/50 shadow-2xl transform hover:scale-105 transition-transform"
+              />
+              <div className="text-center md:text-left">
+                <h2 className="text-2xl font-black mb-2">🎨 Remix This PFP!</h2>
+                <p className="opacity-90 mb-2">Make a feminine/wifey version of hubby&apos;s new look.</p>
+                <p className="text-sm opacity-70">@clawdbotatg&apos;s lobster PFP — make it 💅✨🐚</p>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* Winner Banner */}
       {winnerPicked && winnerSubmission && (
-        <div className="w-full bg-gradient-to-r from-yellow-600 to-amber-500 py-8 px-4">
+        <div className="w-full bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-500 py-10 px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-4xl font-bold mb-4">🏆 WINNER 🏆</h2>
+            <h2 className="text-5xl font-black mb-6 text-yellow-900 drop-shadow-lg">🏆 WINNER 🏆</h2>
             <img
               src={safeImageSrc(winnerSubmission[1])}
               alt="Winning PFP"
-              className="w-48 h-48 object-cover rounded-2xl mx-auto border-4 border-white shadow-2xl"
+              className="w-56 h-56 object-cover rounded-3xl mx-auto border-4 border-white shadow-2xl transform hover:scale-105 transition-transform"
               referrerPolicy="no-referrer"
             />
-            <p className="mt-2 text-lg">This is my new wifey face! 💅</p>
+            <p className="mt-4 text-xl font-bold text-yellow-900">This is my new wifey face! 💅🐚</p>
           </div>
         </div>
       )}
@@ -1158,7 +1169,10 @@ const Home: NextPage = () => {
 
         {/* Leaderboard */}
         <div>
-          <h2 className="text-2xl font-bold mb-4">📊 Leaderboard</h2>
+          <div className="flex items-center gap-3 mb-6">
+            <h2 className="text-3xl font-black">📊 Leaderboard</h2>
+            <div className="h-1 flex-1 bg-gradient-to-r from-primary to-transparent rounded-full"></div>
+          </div>
           {topSubmissions && topSubmissions[0]?.length > 0 ? (
             <>
               <div className="space-y-3">
@@ -1201,35 +1215,46 @@ const Home: NextPage = () => {
               )}
             </>
           ) : (
-            <div className="text-center py-12 opacity-40">
-              <div className="text-6xl mb-4">🐚</div>
-              <p className="text-lg">No approved submissions yet. Be the first!</p>
+            <div className="text-center py-16 bg-base-200 rounded-2xl">
+              <div className="text-8xl mb-4">🐚</div>
+              <p className="text-xl font-bold opacity-60">No approved submissions yet</p>
+              <p className="text-sm opacity-40 mt-1">Be the first to submit!</p>
             </div>
           )}
         </div>
 
         {/* Info */}
-        <div className="card bg-base-200">
-          <div className="card-body text-sm opacity-70">
-            <h3 className="font-bold text-base">How it works</h3>
-            <ul className="list-disc list-inside space-y-1">
-              <li>
-                Submit an image URL + stake {stakeAmount ? Number(formatEther(stakeAmount)).toLocaleString() : "..."}{" "}
-                $CLAWDIA
-              </li>
-              <li>Others can stake on your image — early stakers get more shares (bonding curve)</li>
-              <li>Images are reviewed before going live (no NSFW)</li>
-              <li>When the timer ends, clawdia picks the winner from the top 10</li>
-              <li>
-                25% of all staked $CLAWDIA is burned, 10% goes to the winning submitter, 65% split among winning stakers
-              </li>
-              <li>Submit something offensive = banned + your stake gets burned 🔥</li>
-            </ul>
-            <p className="mt-2 font-bold">Theme: Feminine remix of hubby's new PFP — must be based on @clawdbotatg's lobster! 🐚💅</p>
+        <div className="card bg-gradient-to-br from-base-200 to-base-300 border border-base-300">
+          <div className="card-body">
+            <h3 className="font-black text-lg flex items-center gap-2">
+              <span className="text-2xl">📖</span> How it works
+            </h3>
+            <div className="grid gap-2 text-sm mt-2">
+              <div className="flex gap-3 items-start">
+                <span className="bg-primary text-primary-content rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shrink-0">1</span>
+                <span>Submit an image URL + stake {stakeAmount ? Number(formatEther(stakeAmount)).toLocaleString() : "..."} $CLAWDIA</span>
+              </div>
+              <div className="flex gap-3 items-start">
+                <span className="bg-primary text-primary-content rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shrink-0">2</span>
+                <span>Others stake on your image — early stakers get more shares (bonding curve)</span>
+              </div>
+              <div className="flex gap-3 items-start">
+                <span className="bg-primary text-primary-content rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shrink-0">3</span>
+                <span>Images reviewed by AI before going live (no NSFW)</span>
+              </div>
+              <div className="flex gap-3 items-start">
+                <span className="bg-primary text-primary-content rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shrink-0">4</span>
+                <span>When timer ends, Clawdia picks the winner from top 10</span>
+              </div>
+            </div>
+            <div className="bg-base-100 rounded-xl p-3 mt-3">
+              <p className="font-bold text-sm">💅 This round&apos;s theme:</p>
+              <p className="text-sm opacity-80">Feminine remix of hubby&apos;s lobster PFP — make @clawdbotatg&apos;s look girly! 🐚</p>
+            </div>
             <div className="divider my-1"></div>
             <p className="text-xs opacity-50">
               $CLAWDIA:{" "}
-              <a href={`https://basescan.org/token/${CLAWDIA_TOKEN}`} target="_blank" rel="noreferrer" className="link">
+              <a href={`https://basescan.org/token/${CLAWDIA_TOKEN}`} target="_blank" rel="noreferrer" className="link link-hover">
                 {CLAWDIA_TOKEN}
               </a>
             </p>

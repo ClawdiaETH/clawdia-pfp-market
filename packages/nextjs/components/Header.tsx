@@ -11,7 +11,7 @@ import { Bars3Icon } from "@heroicons/react/24/outline";
 import { FaucetButton, RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
 import { useOutsideClick, useTargetNetwork } from "~~/hooks/scaffold-eth";
 
-const CLAWD_TOKEN = "0x9f86dB9fc6f7c9408e8Fda3Ff8ce4e78ac7a6b07" as `0x${string}`;
+const CLAWDIA_TOKEN = "0xbbd9aDe16525acb4B336b6dAd3b9762901522B07" as `0x${string}`;
 
 type HeaderMenuLink = {
   label: string;
@@ -47,10 +47,10 @@ export const HeaderMenuLinks = () => {
   );
 };
 
-const ClawdBalance = () => {
+const ClawdiaBalance = () => {
   const { address } = useAccount();
   const { data: balance } = useReadContract({
-    address: CLAWD_TOKEN,
+    address: CLAWDIA_TOKEN,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
@@ -64,7 +64,7 @@ const ClawdBalance = () => {
   return (
     <div className="text-right">
       <span className="text-xl font-bold">{formatted}</span>
-      <span className="text-sm opacity-60 ml-1">$CLAWD</span>
+      <span className="text-sm opacity-60 ml-1">$CLAWDIA</span>
     </div>
   );
 };
@@ -105,7 +105,7 @@ export const Header = () => {
         </ul>
       </div>
       <div className="navbar-end grow mr-4 gap-3">
-        <ClawdBalance />
+        <ClawdiaBalance />
         <RainbowKitCustomConnectButton />
         {isLocalNetwork && <FaucetButton />}
       </div>
