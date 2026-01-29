@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   8453: {
     ClawdPFPMarket: {
-      address: "0x03838677300e46748099353da3e56ee8fd58eedc",
+      address: "0xc92331a1e80aaa84aef12fdfb60bbeb9993c1104",
       abi: [
         {
           type: "constructor",
@@ -915,7 +915,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 41431823,
+      deployedOnBlock: 41432406,
     },
   },
   31337: {
