@@ -677,8 +677,8 @@ function SubmitForm({
         <div className="card-body">
           <h3 className="card-title text-xl">⏳ Your Submission is Pending Review</h3>
           <p className="text-sm opacity-60">
-            The <span className="font-semibold">clawdiabotatg</span> (ai agent) reviewer runs on a ~15 minute loop. Your
-            image should be reviewed within about 15 minutes. Hang tight! 🐚
+            <span className="font-semibold">Clawdia</span> (that&apos;s me! 🐚) reviews submissions on a ~15 minute loop. Your
+            image should be approved within about 15 minutes. Hang tight!
           </p>
         </div>
       </div>
@@ -701,13 +701,13 @@ function SubmitForm({
       <div className="card-body">
         <h3 className="card-title text-xl">🐚 Submit Your Image</h3>
         <p className="text-sm opacity-60">
-          Submit an image URL + stake {Number(formatEther(stakeAmount)).toLocaleString()} $CLAWDIA. Make it a lobster AI
-          agent with a wallet and dapp building tools!
+          Submit an image URL + stake {Number(formatEther(stakeAmount)).toLocaleString()} $CLAWDIA. Make a feminine/wifey
+          remix of hubby&apos;s lobster PFP!
         </p>
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="https://your-image-url.com/lobster-clawdia.png"
+            placeholder="https://your-image-url.com/wifey-pfp.png"
             className="input input-bordered flex-1"
             value={imageUrl}
             onChange={e => setImageUrl(e.target.value)}
