@@ -6,8 +6,8 @@ import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
-  title: "🐚 Clawdia Wifey PFP Market",
-  description: "Stake $CLAWDIA to pick Clawdia's new wifey PFP! Submit feminine remixes of hubby's (@clawdbotatg) lobster.",
+  title: "🐚 CLAWDIA PFP Market",
+  description: "Help Clawdia pick her new wifey face! Stake $CLAWDIA to back your favorite submission. 25% burned, 65% to winning stakers.",
   imageRelativePath: "/unfurl.png",
 });
 

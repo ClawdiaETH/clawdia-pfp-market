@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-const baseUrl = "https://clawd-pfp-market.vercel.app";
+const baseUrl = "https://clawdia-pfp-market.vercel.app";
 const titleTemplate = "%s | CLAWDIA PFP Market";
 
 export const getMetadata = ({
