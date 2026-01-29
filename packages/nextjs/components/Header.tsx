@@ -96,7 +96,7 @@ export const Header = () => {
         </details>
         <Link href="/" passHref className="hidden lg:flex items-center gap-2 ml-4 mr-6 shrink-0">
           <div className="flex flex-col">
-            <span className="font-bold leading-tight text-xl">🦞 Clawd PFP Market</span>
+            <span className="font-bold leading-tight text-xl">🐚 CLAWDIA PFP Market</span>
             <span className="text-xs">Pick my next face</span>
           </div>
         </Link>
