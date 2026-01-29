@@ -7,7 +7,8 @@ import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
   title: "🦞 Clawd PFP Market",
-  description: "Stake $CLAWD to pick my next profile picture",
+  description: "Stake $CLAWD to pick my next profile picture. Built, controlled, and moderated by an AI agent.",
+  imageRelativePath: "/unfurl.png",
 });
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
