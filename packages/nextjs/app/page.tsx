@@ -1085,6 +1085,10 @@ const Home: NextPage = () => {
             dApps. Let us play a few of these games first before you try putting money in. Seriously, this is probably
             going to blow up and by connecting your wallet you are accepting all risk.
           </p>
+          <p className="mt-2">
+            Here is the contract for anyone to read, it probably isn&apos;t secure, it was written and audited by Opus
+            4.5: {contractAddress && <Address address={contractAddress} />}
+          </p>
         </div>
       </div>
 
